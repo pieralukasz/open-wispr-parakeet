@@ -4,7 +4,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController!
     var hotkeyManagers: [HotkeyManager] = []
     var recorder: AudioRecorder!
-    var transcriber: Transcriber!
+    var transcriber: (any SpeechTranscribing)!
     var inserter: TextInserter!
     var config: Config!
     var recordingLifecycle = RecordingLifecycle()
@@ -58,7 +58,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusBar.buildMenu()
         }
 
-        if Transcriber.findWhisperBinary() == nil {
+        if config.transcriptionBackend == .whisper && Transcriber.findWhisperBinary() == nil {
             print("Error: whisper-cpp not found. Install it with: brew install whisper-cpp")
             return
         }
@@ -91,7 +91,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             print("Accessibility: granted")
         }
 
-        if !Transcriber.modelExists(modelSize: config.modelSize) {
+        if config.transcriptionBackend == .whisper && !Transcriber.modelExists(modelSize: config.modelSize) {
             DispatchQueue.main.async {
                 self.statusBar.state = .downloading
                 self.statusBar.updateDownloadProgress("Downloading \(self.config.modelSize) model...")
@@ -108,7 +108,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if let modelPath = Transcriber.findModel(modelSize: config.modelSize) {
+        if config.transcriptionBackend == .whisper,
+           let modelPath = Transcriber.findModel(modelSize: config.modelSize) {
             let modelURL = URL(fileURLWithPath: modelPath)
             if !ModelDownloader.isValidGGMLFile(at: modelURL) {
                 let msg = "Model file is corrupted. Re-download with: open-wispr download-model \(config.modelSize)"
@@ -119,6 +120,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return
             }
+        }
+
+        if config.transcriptionBackend == .parakeet {
+            DispatchQueue.main.async {
+                self.statusBar.state = .downloading
+                self.statusBar.updateDownloadProgress("Loading Parakeet v3...")
+            }
+            print("Loading Parakeet v3...")
+            try transcriber.prepare()
+            DispatchQueue.main.async {
+                self.statusBar.updateDownloadProgress(nil)
+            }
+            print("Parakeet v3 ready.")
         }
 
         recorder.prewarm()
@@ -154,6 +168,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let hotkeyDesc = config.hotkeySummary()
         print("open-wispr v\(OpenWispr.version)")
         print("Hotkey: \(hotkeyDesc)")
+        print("Engine: \(config.transcriptionBackend.displayName)")
         print("Model: \(config.modelSize)")
         print("Ready.")
     }
@@ -205,7 +220,25 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeyManagers.append(manager)
         }
 
-        if !wasDownloading && !Transcriber.modelExists(modelSize: config.modelSize) {
+        if newConfig.transcriptionBackend == .parakeet {
+            let selectedTranscriber = transcriber!
+            statusBar.state = .downloading
+            statusBar.updateDownloadProgress("Loading Parakeet v3...")
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                do {
+                    try selectedTranscriber.prepare()
+                    DispatchQueue.main.async {
+                        self?.statusBar.state = .idle
+                        self?.statusBar.updateDownloadProgress(nil)
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self?.statusBar.state = .error(error.localizedDescription)
+                        self?.statusBar.updateDownloadProgress(nil)
+                    }
+                }
+            }
+        } else if !wasDownloading && !Transcriber.modelExists(modelSize: config.modelSize) {
             statusBar.state = .downloading
             statusBar.updateDownloadProgress("Downloading \(config.modelSize) model...")
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -233,10 +266,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.buildMenu()
 
         let hotkeyDesc = config.hotkeySummary()
-        print("Config updated: lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
+        print("Config updated: engine=\(config.transcriptionBackend.rawValue) lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
     }
 
-    private func makeTranscriber(for config: Config) -> Transcriber {
+    private func makeTranscriber(for config: Config) -> any SpeechTranscribing {
+        if config.transcriptionBackend == .parakeet {
+            let transcriber = ParakeetTranscriber(language: config.language)
+            transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+            return transcriber
+        }
+
         let transcriber = Transcriber(
             modelSize: config.modelSize,
             language: config.language,

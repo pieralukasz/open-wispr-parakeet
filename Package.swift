@@ -3,10 +3,17 @@ import PackageDescription
 
 let package = Package(
     name: "open-wispr",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
+    dependencies: [
+        .package(
+            url: "https://github.com/FluidInference/FluidAudio.git",
+            revision: "300165b240c45375add402265f62410b6df33cf1"
+        )
+    ],
     targets: [
         .target(
             name: "OpenWisprLib",
+            dependencies: [.product(name: "FluidAudio", package: "FluidAudio")],
             path: "Sources/OpenWisprLib",
             linkerSettings: [
                 .linkedFramework("CoreAudio"),

@@ -11,6 +11,9 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 cp "$BINARY" "$APP_DIR/Contents/MacOS/open-wispr"
 
+find .build -maxdepth 6 -type d -name 'FluidAudio_FluidAudio.bundle' -exec \
+    ditto {} "$APP_DIR/Contents/Resources/FluidAudio_FluidAudio.bundle" \; -quit
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cp "$REPO_DIR/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
@@ -35,7 +38,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.0</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSUIElement</key>
@@ -46,6 +49,6 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-codesign --force --sign - --identifier com.human37.open-wispr "$APP_DIR"
+codesign --force --deep --sign - --identifier com.human37.open-wispr "$APP_DIR"
 
 echo "Built $APP_DIR"

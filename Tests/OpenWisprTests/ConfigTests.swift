@@ -88,6 +88,26 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(Config.effectiveMaxRecordings(config.maxRecordings), 0)
     }
 
+    func testLegacyConfigDefaultsToWhisperBackend() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "base.en",
+            "language": "en"
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertEqual(config.transcriptionBackend, .whisper)
+    }
+
+    func testParakeetBackendRoundTrip() throws {
+        var config = Config.defaultConfig
+        config.transcriptionBackend = .parakeet
+        let data = try JSONEncoder().encode(config)
+        let decoded = try Config.decode(from: data)
+        XCTAssertEqual(decoded.transcriptionBackend, .parakeet)
+    }
+
     func testConfigDecodesWhisperPrompt() throws {
         let json = """
         {

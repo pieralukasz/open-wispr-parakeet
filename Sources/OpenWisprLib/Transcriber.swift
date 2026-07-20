@@ -1,6 +1,16 @@
 import Foundation
 
-public class Transcriber {
+public protocol SpeechTranscribing: AnyObject, Sendable {
+    var spokenPunctuation: Bool { get set }
+    func prepare() throws
+    func transcribe(audioURL: URL) throws -> String
+}
+
+public extension SpeechTranscribing {
+    func prepare() throws {}
+}
+
+public final class Transcriber: SpeechTranscribing, @unchecked Sendable {
     private let modelSize: String
     private let language: String
     private let whisperPrompt: String?

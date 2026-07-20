@@ -5,10 +5,23 @@ public struct LanguageOption: Equatable, Sendable {
     public let name: String
 }
 
+public enum TranscriptionBackend: String, Codable, CaseIterable, Sendable {
+    case parakeet
+    case whisper
+
+    public var displayName: String {
+        switch self {
+        case .parakeet: return "Parakeet v3"
+        case .whisper: return "Whisper"
+        }
+    }
+}
+
 public struct Config: Codable {
     public var hotkeys: [HotkeyConfig]
     public var modelPath: String?
     public var modelSize: String
+    public var transcriptionBackend: TranscriptionBackend
     public var language: String
     public var whisperPrompt: String?
     public var spokenPunctuation: FlexBool?
@@ -41,6 +54,7 @@ public struct Config: Codable {
         case hotkeys
         case modelPath
         case modelSize
+        case transcriptionBackend
         case language
         case whisperPrompt
         case spokenPunctuation
@@ -63,6 +77,10 @@ public struct Config: Codable {
         }
         self.modelPath = try c.decodeIfPresent(String.self, forKey: .modelPath)
         self.modelSize = try c.decode(String.self, forKey: .modelSize)
+        self.transcriptionBackend = try c.decodeIfPresent(
+            TranscriptionBackend.self,
+            forKey: .transcriptionBackend
+        ) ?? .whisper
         self.language = try c.decode(String.self, forKey: .language)
         self.whisperPrompt = try c.decodeIfPresent(String.self, forKey: .whisperPrompt)
         self.spokenPunctuation = try c.decodeIfPresent(FlexBool.self, forKey: .spokenPunctuation)
@@ -78,6 +96,7 @@ public struct Config: Codable {
         try c.encode(hotkeys[0], forKey: .hotkey)
         try c.encodeIfPresent(modelPath, forKey: .modelPath)
         try c.encode(modelSize, forKey: .modelSize)
+        try c.encode(transcriptionBackend, forKey: .transcriptionBackend)
         try c.encode(language, forKey: .language)
         try c.encodeIfPresent(whisperPrompt, forKey: .whisperPrompt)
         try c.encodeIfPresent(spokenPunctuation, forKey: .spokenPunctuation)
@@ -91,6 +110,7 @@ public struct Config: Codable {
         hotkeys: [HotkeyConfig],
         modelPath: String?,
         modelSize: String,
+        transcriptionBackend: TranscriptionBackend = .whisper,
         language: String,
         whisperPrompt: String? = nil,
         spokenPunctuation: FlexBool?,
@@ -104,6 +124,7 @@ public struct Config: Codable {
             : Config.deduplicateHotkeys(hotkeys)
         self.modelPath = modelPath
         self.modelSize = modelSize
+        self.transcriptionBackend = transcriptionBackend
         self.language = language
         self.whisperPrompt = whisperPrompt
         self.spokenPunctuation = spokenPunctuation
@@ -253,6 +274,7 @@ public struct Config: Codable {
         hotkeys: [HotkeyConfig(keyCode: 63, modifiers: [])],
         modelPath: nil,
         modelSize: "base.en",
+        transcriptionBackend: .whisper,
         language: "en",
         whisperPrompt: nil,
         spokenPunctuation: FlexBool(false),
