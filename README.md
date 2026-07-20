@@ -2,7 +2,7 @@
   <img src="logo.svg" width="80" alt="open-wispr logo">
 </p>
 
-<h1 align="center">open-wispr</h1>
+<h1 align="center">open-wispr-parakeet</h1>
 
 <p align="center">
   <strong><a href="https://open-wispr.com">open-wispr.com</a></strong><br>
@@ -10,31 +10,47 @@
   Everything runs on-device. No audio or text ever leaves your machine.
 </p>
 
-<p align="center">Powered by <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a> with Metal acceleration on Apple Silicon.</p>
+<p align="center">Powered by Parakeet v3 through <a href="https://github.com/FluidInference/FluidAudio">FluidAudio</a>, with whisper.cpp available as a fallback.</p>
 
 ## Install
 
+This repository is a Parakeet-enabled fork of OpenWispr. Build and install it locally:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/install.sh | bash
+git clone https://github.com/pieralukasz/open-wispr-parakeet.git
+cd open-wispr-parakeet
+
+swift build --disable-sandbox -c release
+scripts/bundle-app.sh .build/release/open-wispr .build/OpenWispr.app 0.43.0-parakeet
+
+mkdir -p ~/Applications ~/.local/bin
+ditto .build/OpenWispr.app ~/Applications/OpenWispr.app
+ln -sfn ~/Applications/OpenWispr.app/Contents/MacOS/open-wispr ~/.local/bin/open-wispr
+
+~/.local/bin/open-wispr set-engine parakeet
+~/.local/bin/open-wispr set-language pl
+open ~/Applications/OpenWispr.app
 ```
 
-The script handles everything: installs via Homebrew, walks you through granting permissions, downloads the Whisper model, and starts the service. You'll see live feedback as each step completes.
+Parakeet v3 downloads on first launch and then stays loaded in the menu bar app. Grant Microphone and Accessibility permissions when macOS asks. To launch it automatically, add `~/Applications/OpenWispr.app` in **System Settings → General → Login Items**.
 
-> **Note:** Recent versions of Homebrew (6.0+) have tightened security around third-party taps, so you may be asked to trust this package before it installs. If that happens, the installer prints the exact `brew trust` command to run.
+If the upstream Homebrew edition is already running, stop it first with `brew services stop open-wispr` to avoid two copies using the same hotkey.
 
 A waveform icon appears in your menu bar when it's running.
 
 The default hotkey is the **Globe key** (🌐, bottom-left). Hold it, speak, release.
 
-> **[Full installation guide](docs/install-guide.md)** — permissions walkthrough with screenshots, non-English macOS instructions, and troubleshooting.
+The upstream project remains available at [human37/open-wispr](https://github.com/human37/open-wispr).
 
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/uninstall.sh | bash
+osascript -e 'tell application "OpenWispr" to quit'
+rm -rf ~/Applications/OpenWispr.app
+rm -f ~/.local/bin/open-wispr
 ```
 
-This stops the service, removes the formula, tap, config, models, app bundle, logs, and permissions.
+Configuration and downloaded models remain in `~/.config/open-wispr` and `~/Library/Application Support/FluidAudio` so they can be reused.
 
 ## Configuration
 
@@ -43,6 +59,7 @@ Edit `~/.config/open-wispr/config.json`:
 ```json
 {
   "hotkey": { "keyCode": 63, "modifiers": [] },
+  "transcriptionBackend": "parakeet",
   "modelSize": "base.en",
   "language": "en",
   "spokenPunctuation": false,
@@ -52,7 +69,7 @@ Edit `~/.config/open-wispr/config.json`:
 }
 ```
 
-Then restart: `brew services restart open-wispr`
+Then choose **Reload Configuration** from the menu, or restart the app.
 
 To bind multiple hotkeys, use the `hotkeys` array instead:
 
@@ -72,6 +89,7 @@ Both `hotkey` (single) and `hotkeys` (array) are supported. If both are present,
 | **hotkey** | `63` | Globe (`63`), Right Option (`61`), F5 (`96`), or any key code |
 | **hotkeys** | — | Array of hotkey objects — bind multiple keys to trigger dictation |
 | **modifiers** | `[]` | `"cmd"`, `"ctrl"`, `"shift"`, `"opt"` — combine for chords |
+| **transcriptionBackend** | `"whisper"` | `"parakeet"` for Parakeet v3 on Apple Neural Engine, or `"whisper"` |
 | **modelSize** | `"base.en"` | See model table below |
 | **language** | `"en"` | `"auto"` for auto-detect, or any [ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) — e.g. `it`, `fr`, `de`, `es` |
 | **spokenPunctuation** | `false` | Say "comma", "period", etc. to insert punctuation instead of auto-punctuation |
@@ -80,6 +98,14 @@ Both `hotkey` (single) and `hotkeys` (array) are supported. If both are present,
 | **toggleMode** | `false` | Press hotkey once to start recording, press again to stop. Default is hold-to-talk. |
 
 ### Models
+
+Parakeet v3 is the recommended backend for fast Polish dictation. It stays loaded while the menu bar app is running and supports 25 European languages. Select it from **Engine → Parakeet v3**, or run:
+
+```bash
+open-wispr set-engine parakeet
+```
+
+Selecting a Whisper model from the menu automatically switches the backend to Whisper.
 
 Larger models are more accurate but slower and use more memory. The default `base.en` is a good balance for most users.
 
@@ -125,20 +151,19 @@ Click the menu bar icon to access **Copy Last Dictation** — recovers your most
 
 ## Privacy
 
-open-wispr is completely local. Audio is recorded to a temp file, transcribed by whisper.cpp on your CPU/GPU, and the temp file is deleted. No network requests are made except to download the Whisper model on first run. Optionally, you can configure open-wispr to store a number of past recordings locally via the `maxRecordings` setting. Those recordings stay private and on your machine, and we default to not storing anything.
+open-wispr is completely local. Audio is recorded to a temp file, transcribed by Parakeet/FluidAudio or whisper.cpp, and the temp file is deleted. No network requests are made except to download the selected model on first run. Optionally, you can configure open-wispr to store a number of past recordings locally via the `maxRecordings` setting. Those recordings stay private and on your machine, and we default to not storing anything.
 
 ## Roadmap
 
-See what's planned and in progress on the [public roadmap](https://github.com/users/human37/projects/2). Feature requests and ideas are welcome as [issues](https://github.com/human37/open-wispr/issues).
+This fork tracks OpenWispr 0.43.0 and adds a native FluidAudio/Parakeet v3 backend, engine selection in the menu and CLI, and Polish-first setup instructions. Upstream development lives at [human37/open-wispr](https://github.com/human37/open-wispr).
 
 ## Build from source
 
 ```bash
-git clone https://github.com/human37/open-wispr.git
-cd open-wispr
-brew install whisper-cpp
-swift build -c release
-.build/release/open-wispr start
+swift test --disable-sandbox
+swift build --disable-sandbox -c release
+scripts/bundle-app.sh .build/release/open-wispr .build/OpenWispr.app dev
+open .build/OpenWispr.app
 ```
 
 ## Support

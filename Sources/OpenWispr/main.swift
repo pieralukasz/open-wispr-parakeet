@@ -15,9 +15,11 @@ func printUsage() {
         open-wispr start              Start the dictation daemon
         open-wispr set-hotkey <key>   Set the push-to-talk hotkey
         open-wispr get-hotkey         Show current hotkey
+        open-wispr set-engine <name>  Set engine (parakeet or whisper)
         open-wispr set-model <size>   Set the Whisper model
         open-wispr set-language <code>  Set the language (e.g. en, fr, auto)
         open-wispr download-model [size]  Download a Whisper model
+        open-wispr transcribe-file <path>  Transcribe an audio file with the selected engine
         open-wispr status             Show configuration and status
         open-wispr --help             Show this help message
 
@@ -75,6 +77,7 @@ func cmdSetModel(_ size: String) {
     }
 
     var config = Config.load()
+    config.transcriptionBackend = .whisper
     config.modelSize = size
 
     do {
@@ -82,6 +85,28 @@ func cmdSetModel(_ size: String) {
         print("Model set to: \(size)")
         if !Transcriber.modelExists(modelSize: size) {
             print("Model will be downloaded on next start.")
+        }
+    } catch {
+        print("Error saving config: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
+func cmdSetEngine(_ name: String) {
+    guard let backend = TranscriptionBackend(rawValue: name.lowercased()) else {
+        print("Error: Unknown engine '\(name)'")
+        print("Available: parakeet, whisper")
+        exit(1)
+    }
+
+    var config = Config.load()
+    config.transcriptionBackend = backend
+
+    do {
+        try config.save()
+        print("Engine set to: \(backend.displayName)")
+        if backend == .parakeet {
+            print("Parakeet v3 will be loaded on next start or configuration reload.")
         }
     } catch {
         print("Error saving config: \(error.localizedDescription)")
@@ -133,13 +158,46 @@ func cmdStatus() {
     print("open-wispr v\(version)")
     print("Config:      \(Config.configFile.path)")
     print("Hotkey:      \(hotkeyDesc)")
+    print("Engine:      \(config.transcriptionBackend.displayName)")
     print("Model:       \(config.modelSize)")
-    print("Model ready: \(Transcriber.modelExists(modelSize: config.modelSize) ? "yes" : "no")")
+    let modelReady = config.transcriptionBackend == .parakeet
+        ? "managed by FluidAudio"
+        : (Transcriber.modelExists(modelSize: config.modelSize) ? "yes" : "no")
+    print("Model ready: \(modelReady)")
     print("whisper-cpp: \(Transcriber.findWhisperBinary() != nil ? "yes" : "no")")
     let langName = Config.supportedLanguages.first(where: { $0.code == config.language })?.name ?? config.language
     print("Language:    \(langName) (\(config.language))")
     let toggleMode = config.toggleMode?.value ?? false
     print("Toggle:      \(toggleMode ? "on (press to start/stop)" : "off (hold to talk)")")
+}
+
+func cmdTranscribeFile(_ path: String) {
+    let audioURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+    guard FileManager.default.fileExists(atPath: audioURL.path) else {
+        print("Error: Audio file not found: \(audioURL.path)")
+        exit(1)
+    }
+
+    let config = Config.load()
+    let transcriber: any SpeechTranscribing
+    if config.transcriptionBackend == .parakeet {
+        transcriber = ParakeetTranscriber(language: config.language)
+    } else {
+        transcriber = Transcriber(
+            modelSize: config.modelSize,
+            language: config.language,
+            whisperPrompt: config.whisperPrompt
+        )
+    }
+    transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+
+    do {
+        try transcriber.prepare()
+        print(try transcriber.transcribe(audioURL: audioURL))
+    } catch {
+        print("Error: \(error.localizedDescription)")
+        exit(1)
+    }
 }
 
 let args = CommandLine.arguments
@@ -167,6 +225,12 @@ case "set-model":
         exit(1)
     }
     cmdSetModel(args[2])
+case "set-engine":
+    guard args.count > 2 else {
+        print("Usage: open-wispr set-engine <parakeet|whisper>")
+        exit(1)
+    }
+    cmdSetEngine(args[2])
 case "set-language":
     guard args.count > 2 else {
         print("Usage: open-wispr set-language <code>")
@@ -181,6 +245,12 @@ case "download-model":
     cmdDownloadModel(size)
 case "status":
     cmdStatus()
+case "transcribe-file":
+    guard args.count > 2 else {
+        print("Usage: open-wispr transcribe-file <audio-path>")
+        exit(1)
+    }
+    cmdTranscribeFile(args[2])
 case "--help", "-h", "help":
     printUsage()
 case nil:

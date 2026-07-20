@@ -166,7 +166,36 @@ class StatusBarController: NSObject {
         langItem.submenu = langSubmenu
         menu.addItem(langItem)
 
-        let modelItem = NSMenuItem(title: "Model: \(config.modelSize)", action: nil, keyEquivalent: "")
+        let engineItem = NSMenuItem(
+            title: "Engine: \(config.transcriptionBackend.displayName)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let engineSubmenu = NSMenu()
+
+        for backend in TranscriptionBackend.allCases {
+            let target = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                cfg.transcriptionBackend = backend
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            menuItemTargets.append(target)
+            let suffix = backend == .parakeet ? " — fast, local" : " — compatible"
+            let item = NSMenuItem(
+                title: "\(backend.displayName)\(suffix)",
+                action: #selector(MenuItemTarget.invoke),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.state = backend == config.transcriptionBackend ? .on : .off
+            engineSubmenu.addItem(item)
+        }
+
+        engineItem.submenu = engineSubmenu
+        menu.addItem(engineItem)
+
+        let modelItem = NSMenuItem(title: "Whisper model: \(config.modelSize)", action: nil, keyEquivalent: "")
         let modelSubmenu = NSMenu()
 
         let englishModels = Config.supportedModels.filter { Config.isEnglishOnlyModel($0) }
@@ -179,6 +208,7 @@ class StatusBarController: NSObject {
         for model in englishModels {
             let target = MenuItemTarget { [weak self] in
                 var cfg = Config.load()
+                cfg.transcriptionBackend = .whisper
                 cfg.modelSize = model
                 if cfg.language != "en" {
                     cfg.language = "en"
@@ -204,6 +234,7 @@ class StatusBarController: NSObject {
         for model in multilingualModels {
             let target = MenuItemTarget { [weak self] in
                 var cfg = Config.load()
+                cfg.transcriptionBackend = .whisper
                 cfg.modelSize = model
                 try? cfg.save()
                 self?.onConfigChange?(cfg)
