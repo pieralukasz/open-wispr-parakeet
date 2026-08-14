@@ -32,6 +32,11 @@ func printUsage() {
 }
 
 func cmdStart() {
+    guard DaemonLock.acquire() else {
+        print("open-wispr is already running; look for the waveform icon in the menu bar.")
+        return
+    }
+
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
@@ -170,6 +175,11 @@ let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
 let command: String? = {
     if let rawCommand, rawCommand.hasPrefix("-psn_") { return "start" }
+    // Finder, Launchpad, and `open` run the bundled binary with no arguments at
+    // all on current macOS, so a bare launch from inside the bundle means "start
+    // the daemon". Only older systems passed the -psn_ argument above. A bare CLI
+    // build outside a bundle still prints usage.
+    if rawCommand == nil, AppBundleLaunch.isRunningInsideAppBundle { return "start" }
     return rawCommand
 }()
 

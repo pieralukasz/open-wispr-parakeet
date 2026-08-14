@@ -8,6 +8,11 @@ enum AppBundleLaunch {
         path.contains(bundleMarker)
     }
 
+    static var isRunningInsideAppBundle: Bool {
+        guard let path = Bundle.main.executableURL?.resolvingSymlinksInPath().path else { return false }
+        return isExecutableInsideAppBundle(path)
+    }
+
     static func findOpenWisprAppBundle() -> URL? {
         if let env = ProcessInfo.processInfo.environment["OPEN_WISPR_APP"]?.trimmingCharacters(in: .whitespacesAndNewlines), !env.isEmpty {
             let path = (env as NSString).expandingTildeInPath
