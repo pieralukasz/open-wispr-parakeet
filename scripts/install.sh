@@ -199,8 +199,6 @@ if brew list open-wispr &>/dev/null || [ -d ~/Applications/OpenWispr.app ]; then
     brew services stop open-wispr </dev/null >/dev/null 2>&1 || true
     brew uninstall --force open-wispr </dev/null >/dev/null 2>&1 || true
     brew untap human37/open-wispr </dev/null >/dev/null 2>&1 || true
-    tccutil reset Accessibility com.human37.open-wispr </dev/null >/dev/null 2>&1 || true
-    tccutil reset Microphone com.human37.open-wispr </dev/null >/dev/null 2>&1 || true
     rm -rf ~/Applications/OpenWispr.app
 
     stop_spin
@@ -289,24 +287,14 @@ else
     ok "Accessibility"
 fi
 
-# ── Step 4: Model download ───────────────────────────────────────────
-if grep -q "Downloading" "$LOG" 2>/dev/null; then
-    step "Downloading Whisper model"
-
-    if ! wait_for_log "Ready\." 300 "Downloading model (~142 MB, one-time)..."; then
-        die "Download timed out. Check: tail -f $LOG"
-    fi
-    ok "Model ready"
-fi
-
-# ── Step 5: Wait for ready ───────────────────────────────────────────
+# ── Step 4: Wait for ready ───────────────────────────────────────────
 if ! grep -q "Ready\." "$LOG" 2>/dev/null; then
-    if ! wait_for_log "Ready\." 30 "Finishing setup..."; then
+    if ! wait_for_log "Ready\." 300 "Loading Parakeet v3 (first launch may download it)..."; then
         die "Timed out. Check: tail -f $LOG"
     fi
 fi
 
-# ── Step 6: Verify service ───────────────────────────────────────────
+# ── Step 5: Verify service ───────────────────────────────────────────
 if brew services list 2>/dev/null | grep -q "open-wispr.*started"; then
     ok "Running as background service"
 else
@@ -318,7 +306,6 @@ fi
 
 # ── Done ──────────────────────────────────────────────────────────────
 hotkey=$(grep "^Hotkey:" "$LOG" 2>/dev/null | tail -1 | sed 's/^Hotkey: //')
-model=$(grep "^Model:" "$LOG" 2>/dev/null | tail -1 | sed 's/^Model: //')
 version=$(grep "^open-wispr v" "$LOG" 2>/dev/null | tail -1)
 
 printf "\n"
@@ -327,7 +314,7 @@ printf "  ${GREEN}${BOLD}Ready!${NC}\n"
 printf "\n"
 [ -n "$version" ] && printf "  ${DIM}%s${NC}\n" "$version"
 [ -n "$hotkey" ]  && printf "  Hotkey  ${BOLD}%s${NC}\n" "$hotkey"
-[ -n "$model" ]   && printf "  Model   ${BOLD}%s${NC}\n" "$model"
+printf "  Engine  ${BOLD}Parakeet v3${NC}\n"
 printf "\n"
 printf "  Hold your hotkey, speak, release -- text appears at cursor.\n"
 printf "\n"

@@ -4,21 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>open-wispr — Free Voice Dictation for macOS (100% Local, No Cloud)</title>
-  <meta name="description" content="The best free speech-to-text app for Mac. Hold a key, speak, release — text appears instantly. Powered by Whisper AI, runs 100% on-device. No cloud, no accounts, no subscription. Open source.">
-  <meta name="keywords" content="voice dictation, speech to text, macOS, whisper, on-device, privacy, open source, Apple Silicon, voice typing, dictation app">
+  <meta name="description" content="Free speech-to-text for Mac powered by Parakeet v3. Microphone and system-audio transcription runs locally with no cloud, accounts, or subscription.">
+  <meta name="keywords" content="voice dictation, speech to text, macOS, parakeet, system audio, on-device, privacy, open source, Apple Silicon, voice typing">
   <meta name="author" content="human37">
   <link rel="canonical" href="https://open-wispr.com/">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://open-wispr.com/">
   <meta property="og:title" content="open-wispr — Free Voice Dictation for macOS (100% Local)">
-  <meta property="og:description" content="The best free speech-to-text for Mac. Hold a key, speak, release — text appears instantly. Whisper AI, 100% on-device. No cloud, no subscription.">
+  <meta property="og:description" content="Local Parakeet v3 speech-to-text for Mac with microphone and system-audio capture. No cloud or subscription.">
   <meta property="og:image" content="https://open-wispr.com/og.png">
   <meta property="og:site_name" content="open-wispr">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="open-wispr — Free Voice Dictation for macOS (100% Local)">
-  <meta name="twitter:description" content="The best free speech-to-text for Mac. Hold a key, speak, release — text appears instantly. Whisper AI, 100% on-device. No subscription.">
+  <meta name="twitter:description" content="Local Parakeet v3 speech-to-text for Mac with microphone and system-audio capture. No subscription.">
   <meta name="twitter:image" content="https://open-wispr.com/og.png">
 
   <script type="application/ld+json">
@@ -29,7 +29,7 @@
     "operatingSystem": "macOS",
     "applicationCategory": "UtilitiesApplication",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "description": "Free, private voice-to-text for macOS. Powered by Whisper AI, runs entirely on-device.",
+    "description": "Free, private Parakeet v3 voice-to-text for macOS that runs entirely on-device.",
     "url": "https://open-wispr.com/",
     "downloadUrl": "https://open-wispr.com/#install",
     "softwareVersion": "0.30.0",
@@ -55,15 +55,15 @@
         "name": "Does any audio or text leave my computer?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. Everything runs 100% on-device. Audio is recorded to a temporary file, transcribed locally by Whisper, and the file is immediately deleted. There are zero network requests."
+          "text": "No. Audio is recorded to a temporary file, transcribed locally by Parakeet v3, and immediately deleted. The model download is the only required network access."
         }
       },
       {
         "@type": "Question",
-        "name": "How does this compare to VoiceInk, Whisper Flow, or Superwhisper?",
+        "name": "How does this compare to VoiceInk, Wispr Flow, or Superwhisper?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "open-wispr is the free, MIT-licensed alternative. VoiceInk ($39.99, GPLv3) is the closest — also open source and local — but adds AI features and custom dictionaries. Wispr Flow ($15/mo) uses cloud AI. Superwhisper ($8.49/mo) is local but closed-source. open-wispr gives you the same core push-to-talk Whisper experience with zero cost and the most permissive license."
+          "text": "open-wispr is a free, MIT-licensed, local Parakeet v3 alternative with microphone and system-audio capture."
         }
       },
       {
@@ -71,7 +71,7 @@
         "name": "What Macs are supported?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Any Mac with Apple Silicon (M1 or later) running macOS 13+. Whisper uses Metal GPU acceleration for fast inference. Intel Macs are not supported."
+          "text": "Any Mac with Apple Silicon running macOS 14 or later. Intel Macs are not supported."
         }
       },
       {
@@ -79,7 +79,7 @@
         "name": "How accurate is it compared to Apple Dictation?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Significantly better. Whisper handles punctuation, technical jargon, code terms, and accented speech far more reliably than Apple's built-in dictation. It supports 99 languages."
+          "text": "Parakeet v3 provides fast local transcription and supports the European languages listed in the app."
         }
       },
       {
@@ -615,7 +615,7 @@
 <section class="hero">
   <h1>Voice to text, entirely on-device.</h1>
 
-  <p class="hero-sub">Hold a key, speak, release. Your words appear at the cursor. Powered by <a href="https://github.com/ggerganov/whisper.cpp">whisper.cpp</a> with Metal acceleration. 100% local — no cloud, no accounts, no telemetry. Free and open source under MIT.</p>
+  <p class="hero-sub">Hold a key, speak, release. Your words appear at the cursor. Powered by <a href="https://github.com/FluidInference/FluidAudio">Parakeet v3 through FluidAudio</a>. Local transcription, no accounts, no telemetry. Free and open source under MIT.</p>
 
   <div class="demo-inline">
     <div class="demo-editor">
@@ -651,7 +651,7 @@
     <div class="step-card">
       <div class="step-num">02</div>
       <div class="step-title">Speak</div>
-      <div class="step-desc">Talk naturally. Whisper runs on your GPU via Metal. No network latency, no cloud processing.</div>
+      <div class="step-desc">Talk naturally. Parakeet v3 runs locally through FluidAudio. No network latency or cloud processing.</div>
     </div>
     <div class="step-card">
       <div class="step-num">03</div>
@@ -723,8 +723,8 @@
         <td class="muted">No</td>
       </tr>
       <tr>
-        <td>Whisper engine</td>
-        <td class="check">Yes</td>
+        <td>Local transcription</td>
+        <td class="check">Parakeet v3</td>
         <td class="check">Yes</td>
         <td class="muted">Cloud AI</td>
         <td class="check">Yes</td>
@@ -808,7 +808,7 @@
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Fast</h3>
-      <p>Runs on Apple Silicon GPU via whisper.cpp and Metal. Transcription is real-time or faster on M1 and above.</p>
+      <p>Parakeet v3 runs natively through FluidAudio and stays loaded for fast transcription.</p>
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Universal</h3>
@@ -816,11 +816,11 @@
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Configurable</h3>
-      <p>Choose your hotkey, model size, and language. One command to change, one restart to apply. Everything in the terminal.</p>
+      <p>Choose your hotkey, language, recording mode, microphone, and system-audio source from the menu.</p>
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Multilingual</h3>
-      <p>Supports 99 languages via Whisper's multilingual models. Set an ISO 639-1 code in the config and use a non-.en model.</p>
+      <p>Supports Parakeet's European language set, including Polish, English, German, French, Spanish, and Ukrainian.</p>
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Lightweight</h3>
@@ -831,16 +831,16 @@
 
 <section class="config">
   <p class="section-tag">Configuration</p>
-  <h2>One file. Eight options.</h2>
+  <h2>One simple configuration file.</h2>
   <div class="config-example">
     <div class="card-header">~/.config/open-wispr/config.json</div>
     <pre>{
   "<b>hotkey</b>": { "<b>keyCode</b>": 63, "<b>modifiers</b>": [] },
-  "<b>modelSize</b>": "base.en",
   "<b>language</b>": "en",
   "<b>spokenPunctuation</b>": false,
   "<b>maxRecordings</b>": 0,
-  "<b>toggleMode</b>": false
+  "<b>toggleMode</b>": false,
+  "<b>audioCaptureSource</b>": "microphone"
 }</pre>
   </div>
   <table class="config-table">
@@ -856,14 +856,9 @@
       <td><code>cmd</code> <code>ctrl</code> <code>shift</code> <code>opt</code> &mdash; combine for chords</td>
     </tr>
     <tr>
-      <td>modelSize</td>
-      <td>"base.en"</td>
-      <td><code>tiny.en</code> 75 MB, fastest &middot; <code>base.en</code> 142 MB, good balance (default) &middot; <code>small.en</code> 466 MB, more accurate &middot; <code>medium.en</code> 1.5 GB, great accuracy &middot; <code>large-v3-turbo</code> 1.6 GB, fast multilingual &middot; <code>large-v3</code> 3 GB, best accuracy (M1 Pro+ recommended). Quantized <code>-q5_0</code>/<code>-q5_1</code>/<code>-q8_0</code> variants are also available at ~⅓&ndash;½ the size with minimal quality loss &mdash; see the README for the full table.</td>
-    </tr>
-    <tr>
       <td>language</td>
       <td>"en"</td>
-      <td>Any ISO 639-1 code. Use a non-.en model for other languages.</td>
+      <td>Choose a supported Parakeet language or use <code>auto</code>.</td>
     </tr>
     <tr>
       <td>spokenPunctuation</td>
@@ -879,6 +874,11 @@
       <td>toggleMode</td>
       <td>false</td>
       <td>Press hotkey once to start recording, press again to stop. Default is hold-to-talk.</td>
+    </tr>
+    <tr>
+      <td>audioCaptureSource</td>
+      <td>"microphone"</td>
+      <td><code>microphone</code>, <code>systemAudio</code>, or <code>microphoneAndSystemAudio</code>.</td>
     </tr>
   </table>
   <p class="config-note">Edit <code>~/.config/open-wispr/config.json</code>, then restart: <code>brew services restart open-wispr</code></p>
@@ -915,19 +915,19 @@
     </details>
     <details class="faq-item">
       <summary>Does any audio or text leave my computer?</summary>
-      <p>No. Everything runs 100% on-device. Audio goes to a temp file, transcribed locally by Whisper, then deleted immediately. There are zero network requests -- no cloud, no accounts, no telemetry. Optionally, you can configure open-wispr to store a number of past recordings locally via the <code>maxRecordings</code> setting. Those recordings stay private and on your machine, and we default to not storing anything.</p>
+      <p>No audio or transcription leaves your Mac. Audio goes to a temporary file, is transcribed locally by Parakeet v3, then deleted. Network access is only used to download the model initially.</p>
     </details>
     <details class="faq-item">
-      <summary>How does this compare to VoiceInk, Whisper Flow, or Superwhisper?</summary>
-      <p>open-wispr is the free, MIT-licensed alternative. VoiceInk ($39.99, GPLv3) is the closest — also open source and local — but adds AI features, custom dictionaries, and app-specific modes. Wispr Flow ($15/mo) uses cloud AI. Superwhisper ($8.49/mo) is local but closed-source. open-wispr gives you the same core experience — push-to-talk local dictation powered by Whisper — with zero cost, zero bloat, and the most permissive license.</p>
+      <summary>How does this compare to VoiceInk, Wispr Flow, or Superwhisper?</summary>
+      <p>open-wispr is a free, MIT-licensed, local Parakeet v3 alternative with microphone and system-audio capture.</p>
     </details>
     <details class="faq-item">
       <summary>What Macs are supported?</summary>
-      <p>Any Mac with Apple Silicon (M1 or later) running macOS 13+. Whisper uses Metal GPU acceleration for fast inference. Intel Macs are not supported.</p>
+      <p>Any Apple Silicon Mac running macOS 14 or later. Intel Macs are not supported.</p>
     </details>
     <details class="faq-item">
       <summary>How accurate is it compared to Apple Dictation?</summary>
-      <p>Significantly better. Whisper handles punctuation, technical jargon, code terms, and accented speech far more reliably than Apple's built-in dictation. It supports 99 languages and produces properly punctuated output by default.</p>
+      <p>Parakeet v3 provides fast local transcription and supports the European languages offered in the app.</p>
     </details>
     <details class="faq-item">
       <summary>Can I use it in any app?</summary>

@@ -1,7 +1,7 @@
 import FluidAudio
 import Foundation
 
-public final class ParakeetTranscriber: SpeechTranscribing, @unchecked Sendable {
+public final class ParakeetTranscriber: @unchecked Sendable {
     private static let engine = ParakeetEngine()
     private let languageCode: String
     public var spokenPunctuation = false

@@ -1,10 +1,9 @@
 class OpenWispr < Formula
-  desc "Push-to-talk voice dictation for macOS using Whisper"
+  desc "Local Parakeet v3 voice dictation for macOS"
   homepage "https://github.com/human37/open-wispr"
   url "https://github.com/human37/open-wispr.git", tag: "v0.9.1"
   license "MIT"
 
-  depends_on "whisper-cpp"
   depends_on :macos
 
   def install
@@ -38,7 +37,7 @@ class OpenWispr < Formula
         brew services start open-wispr
 
       Grant Accessibility and Microphone when prompted.
-      The Whisper model downloads automatically (~142 MB).
+      Parakeet v3 downloads automatically on first launch.
     EOS
   end
 

@@ -126,6 +126,20 @@ class StatusBarController: NSObject {
             stateMenuItem = stateItem
         }
 
+        if config.audioCaptureSource.includesSystemAudio, !Permissions.hasScreenRecording {
+            let target = MenuItemTarget {
+                Permissions.openScreenRecordingSettings()
+            }
+            menuItemTargets.append(target)
+            let item = NSMenuItem(
+                title: "Grant Screen Recording Permission...",
+                action: #selector(MenuItemTarget.invoke),
+                keyEquivalent: ""
+            )
+            item.target = target
+            menu.addItem(item)
+        }
+
         menu.addItem(NSMenuItem.separator())
 
         let currentLang = config.language
@@ -140,17 +154,6 @@ class StatusBarController: NSObject {
             let target = MenuItemTarget { [weak self] in
                 var cfg = Config.load()
                 cfg.language = lang.code
-                if lang.code != "en" && cfg.modelSize.hasSuffix(".en") {
-                    let base = String(cfg.modelSize.dropLast(3))
-                    if Config.supportedModels.contains(base) {
-                        cfg.modelSize = base
-                    }
-                } else if lang.code == "en" && !cfg.modelSize.hasSuffix(".en") {
-                    let enVariant = cfg.modelSize + ".en"
-                    if Config.supportedModels.contains(enVariant) {
-                        cfg.modelSize = enVariant
-                    }
-                }
                 try? cfg.save()
                 self?.onConfigChange?(cfg)
             }
@@ -166,90 +169,31 @@ class StatusBarController: NSObject {
         langItem.submenu = langSubmenu
         menu.addItem(langItem)
 
-        let engineItem = NSMenuItem(
-            title: "Engine: \(config.transcriptionBackend.displayName)",
+        let audioSourceItem = NSMenuItem(
+            title: "Audio Input: \(config.audioCaptureSource.displayName)",
             action: nil,
             keyEquivalent: ""
         )
-        let engineSubmenu = NSMenu()
-
-        for backend in TranscriptionBackend.allCases {
+        let audioSourceSubmenu = NSMenu()
+        for source in AudioCaptureSource.allCases {
             let target = MenuItemTarget { [weak self] in
                 var cfg = Config.load()
-                cfg.transcriptionBackend = backend
+                cfg.audioCaptureSource = source
                 try? cfg.save()
                 self?.onConfigChange?(cfg)
             }
             menuItemTargets.append(target)
-            let suffix = backend == .parakeet ? " — fast, local" : " — compatible"
             let item = NSMenuItem(
-                title: "\(backend.displayName)\(suffix)",
+                title: source.displayName,
                 action: #selector(MenuItemTarget.invoke),
                 keyEquivalent: ""
             )
             item.target = target
-            item.state = backend == config.transcriptionBackend ? .on : .off
-            engineSubmenu.addItem(item)
+            item.state = source == config.audioCaptureSource ? .on : .off
+            audioSourceSubmenu.addItem(item)
         }
-
-        engineItem.submenu = engineSubmenu
-        menu.addItem(engineItem)
-
-        let modelItem = NSMenuItem(title: "Whisper model: \(config.modelSize)", action: nil, keyEquivalent: "")
-        let modelSubmenu = NSMenu()
-
-        let englishModels = Config.supportedModels.filter { Config.isEnglishOnlyModel($0) }
-        let multilingualModels = Config.supportedModels.filter { !Config.isEnglishOnlyModel($0) }
-
-        let engHeader = NSMenuItem(title: "English", action: nil, keyEquivalent: "")
-        engHeader.isEnabled = false
-        modelSubmenu.addItem(engHeader)
-
-        for model in englishModels {
-            let target = MenuItemTarget { [weak self] in
-                var cfg = Config.load()
-                cfg.transcriptionBackend = .whisper
-                cfg.modelSize = model
-                if cfg.language != "en" {
-                    cfg.language = "en"
-                }
-                try? cfg.save()
-                self?.onConfigChange?(cfg)
-            }
-            self.menuItemTargets.append(target)
-            let item = NSMenuItem(title: "  \(model)", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
-            item.target = target
-            if model == config.modelSize {
-                item.state = .on
-            }
-            modelSubmenu.addItem(item)
-        }
-
-        modelSubmenu.addItem(NSMenuItem.separator())
-
-        let multiHeader = NSMenuItem(title: "Multilingual", action: nil, keyEquivalent: "")
-        multiHeader.isEnabled = false
-        modelSubmenu.addItem(multiHeader)
-
-        for model in multilingualModels {
-            let target = MenuItemTarget { [weak self] in
-                var cfg = Config.load()
-                cfg.transcriptionBackend = .whisper
-                cfg.modelSize = model
-                try? cfg.save()
-                self?.onConfigChange?(cfg)
-            }
-            self.menuItemTargets.append(target)
-            let item = NSMenuItem(title: "  \(model)", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
-            item.target = target
-            if model == config.modelSize {
-                item.state = .on
-            }
-            modelSubmenu.addItem(item)
-        }
-
-        modelItem.submenu = modelSubmenu
-        menu.addItem(modelItem)
+        audioSourceItem.submenu = audioSourceSubmenu
+        menu.addItem(audioSourceItem)
 
         let devices = AudioDeviceManager.listInputDevices()
         let selectedDevice = devices.first(where: { device in
@@ -258,9 +202,13 @@ class StatusBarController: NSObject {
             return false
         })
         let currentDeviceName = selectedDevice?.name ?? "System Default"
-        let audioItem = NSMenuItem(title: "Audio Input: \(currentDeviceName)", action: nil, keyEquivalent: "")
-        let audioSubmenu = NSMenu()
-        audioSubmenu.autoenablesItems = false
+        let microphoneItem = NSMenuItem(
+            title: "Microphone: \(currentDeviceName)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let microphoneSubmenu = NSMenu()
+        microphoneSubmenu.autoenablesItems = false
 
         let defaultTarget = MenuItemTarget { [weak self] in
             var cfg = Config.load()
@@ -275,10 +223,10 @@ class StatusBarController: NSObject {
         if config.audioInputDeviceID == nil && config.audioInputDeviceUID == nil {
             defaultItem.state = .on
         }
-        audioSubmenu.addItem(defaultItem)
+        microphoneSubmenu.addItem(defaultItem)
 
         if !devices.isEmpty {
-            audioSubmenu.addItem(NSMenuItem.separator())
+            microphoneSubmenu.addItem(NSMenuItem.separator())
         }
 
         for device in devices {
@@ -293,11 +241,11 @@ class StatusBarController: NSObject {
             let item = NSMenuItem(title: device.name, action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
             item.target = target
             if selectedDevice?.id == device.id { item.state = .on }
-            audioSubmenu.addItem(item)
+            microphoneSubmenu.addItem(item)
         }
 
-        audioItem.submenu = audioSubmenu
-        menu.addItem(audioItem)
+        microphoneItem.submenu = microphoneSubmenu
+        menu.addItem(microphoneItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -313,6 +261,19 @@ class StatusBarController: NSObject {
         toggleItem.target = toggleTarget
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
+
+        let launchAtLoginTarget = MenuItemTarget { [weak self] in
+            self?.toggleLaunchAtLogin()
+        }
+        menuItemTargets.append(launchAtLoginTarget)
+        let launchAtLoginItem = NSMenuItem(
+            title: "Start at Login",
+            action: #selector(MenuItemTarget.invoke),
+            keyEquivalent: ""
+        )
+        launchAtLoginItem.target = launchAtLoginTarget
+        launchAtLoginItem.state = LaunchAtLogin.isEnabled ? .on : .off
+        menu.addItem(launchAtLoginItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -364,6 +325,25 @@ class StatusBarController: NSObject {
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem.menu = menu
+    }
+
+    private func toggleLaunchAtLogin() {
+        do {
+            if LaunchAtLogin.isEnabled {
+                try LaunchAtLogin.disable()
+            } else {
+                try LaunchAtLogin.enable()
+            }
+        } catch {
+            print("Launch at login: \(error.localizedDescription)")
+            let alert = NSAlert()
+            alert.messageText = "Could not change the login setting"
+            alert.informativeText = error.localizedDescription
+            alert.addButton(withTitle: "OK")
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
+        buildMenu()
     }
 
     @objc private func reloadConfiguration() {

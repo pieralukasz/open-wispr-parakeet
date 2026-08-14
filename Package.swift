@@ -19,6 +19,7 @@ let package = Package(
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("AppKit"),
+                .linkedFramework("ScreenCaptureKit"),
             ]
         ),
         .executableTarget(

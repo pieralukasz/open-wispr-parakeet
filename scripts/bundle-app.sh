@@ -45,6 +45,8 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>OpenWispr needs microphone access to record speech for transcription.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>OpenWispr needs screen and system audio access to transcribe audio playing on this Mac.</string>
 </dict>
 </plist>
 PLIST

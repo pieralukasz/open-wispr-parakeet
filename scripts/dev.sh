@@ -113,38 +113,10 @@ echo "open-wispr dev build"
 echo "────────────────────"
 
 # Read current config values
-cur_model=$(read_config modelSize base.en)
 cur_lang=$(read_config language en)
 cur_punct=$(read_config spokenPunctuation false)
 cur_max_recordings=$(read_config maxRecordings 0)
 cur_toggle=$(read_config toggleMode false)
-
-
-# Model
-echo ""
-echo "  Model sizes:"
-echo "    1) tiny.en    (75 MB)"
-echo "    2) base.en    (142 MB)"
-echo "    3) small.en   (466 MB)"
-echo "    4) medium.en  (1.5 GB)"
-echo "    5) tiny       (multilingual)"
-echo "    6) base       (multilingual)"
-echo "    7) small      (multilingual)"
-echo "    8) medium     (multilingual)"
-printf "  Model [%s]: " "$cur_model"
-read -r model_choice
-case "$model_choice" in
-    1) model="tiny.en" ;;
-    2) model="base.en" ;;
-    3) model="small.en" ;;
-    4) model="medium.en" ;;
-    5) model="tiny" ;;
-    6) model="base" ;;
-    7) model="small" ;;
-    8) model="medium" ;;
-    "") model="$cur_model" ;;
-    *) model="$model_choice" ;;
-esac
 
 # Language
 printf "  Language [%s]: " "$cur_lang"
@@ -215,7 +187,6 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 cat > "$CONFIG_FILE" << EOF
 {
   "language": "$lang",
-  "modelSize": "$model",
   "spokenPunctuation": $punct,
   "maxRecordings": $max_recordings,
   "toggleMode": $toggle,
@@ -230,7 +201,7 @@ if [ "$hotkey_mods_json" != "[]" ]; then
 else
     hotkey_display="$hotkey_name"
 fi
-echo "  Config: model=$model  lang=$lang  punctuation=$punct  maxRecordings=$max_recordings  toggle=$toggle  hotkey=$hotkey_display"
+echo "  Config: engine=parakeet  lang=$lang  punctuation=$punct  maxRecordings=$max_recordings  toggle=$toggle  hotkey=$hotkey_display"
 echo "────────────────────"
 
 # Kill any running instances
@@ -243,11 +214,6 @@ sleep 1
 if brew list open-wispr &>/dev/null; then
     echo "  Removing brew installation..."
     brew uninstall --force open-wispr 2>/dev/null || true
-fi
-
-if ! brew list whisper-cpp &>/dev/null; then
-    echo "  Reinstalling whisper-cpp..."
-    brew install whisper-cpp
 fi
 
 # Build from source

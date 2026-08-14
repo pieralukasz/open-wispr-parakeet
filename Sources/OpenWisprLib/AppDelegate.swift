@@ -4,12 +4,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController!
     var hotkeyManagers: [HotkeyManager] = []
     var recorder: AudioRecorder!
-    var transcriber: (any SpeechTranscribing)!
+    var transcriber: ParakeetTranscriber!
     var inserter: TextInserter!
     var config: Config!
     var recordingLifecycle = RecordingLifecycle()
     var currentRecordingURL: URL?
+    private var recordingStartTask: Task<Bool, Never>?
     private var sleepWakeObservers: [NSObjectProtocol] = []
+    private var hasShownScreenRecordingAlert = false
     var isReady = false
     public var lastTranscription: String?
 
@@ -24,6 +26,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        recordingStartTask?.cancel()
+        recorder?.teardown()
         unregisterSleepWakeObservers()
     }
 
@@ -43,10 +47,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             uid: config.audioInputDeviceUID,
             legacyID: config.audioInputDeviceID
         )
+        recorder.captureSource = config.audioCaptureSource
         if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
             RecordingStore.deleteAllRecordings()
         }
-        transcriber = makeTranscriber(for: config)
+        transcriber = makeParakeetTranscriber(for: config)
 
         DispatchQueue.main.async {
             self.statusBar.reprocessHandler = { [weak self] url in
@@ -58,17 +63,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusBar.buildMenu()
         }
 
-        if config.transcriptionBackend == .whisper && Transcriber.findWhisperBinary() == nil {
-            print("Error: whisper-cpp not found. Install it with: brew install whisper-cpp")
-            return
-        }
-
-        if Permissions.didUpgrade() {
-            print("Accessibility: upgrade detected, resetting permissions...")
-            Permissions.resetAccessibility()
-            Thread.sleep(forTimeInterval: 1)
-        }
-
         if !AXIsProcessTrusted() {
             DispatchQueue.main.async {
                 self.statusBar.state = .waitingForPermission
@@ -76,7 +70,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        Permissions.ensureMicrophone()
+        if config.audioCaptureSource.includesMicrophone {
+            Permissions.ensureMicrophone()
+        }
+
+        if config.audioCaptureSource.includesSystemAudio {
+            Permissions.ensureScreenRecording()
+        }
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
@@ -91,51 +91,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             print("Accessibility: granted")
         }
 
-        if config.transcriptionBackend == .whisper && !Transcriber.modelExists(modelSize: config.modelSize) {
-            DispatchQueue.main.async {
-                self.statusBar.state = .downloading
-                self.statusBar.updateDownloadProgress("Downloading \(self.config.modelSize) model...")
-            }
-            print("Downloading \(config.modelSize) model...")
-            try ModelDownloader.download(modelSize: config.modelSize) { [weak self] percent in
-                DispatchQueue.main.async {
-                    let pct = Int(percent)
-                    self?.statusBar.updateDownloadProgress("Downloading \(self?.config.modelSize ?? "") model... \(pct)%", percent: percent)
-                }
-            }
-            DispatchQueue.main.async {
-                self.statusBar.updateDownloadProgress(nil)
-            }
+        DispatchQueue.main.async {
+            self.statusBar.state = .downloading
+            self.statusBar.updateDownloadProgress("Loading Parakeet v3...")
         }
-
-        if config.transcriptionBackend == .whisper,
-           let modelPath = Transcriber.findModel(modelSize: config.modelSize) {
-            let modelURL = URL(fileURLWithPath: modelPath)
-            if !ModelDownloader.isValidGGMLFile(at: modelURL) {
-                let msg = "Model file is corrupted. Re-download with: open-wispr download-model \(config.modelSize)"
-                print("Error: \(msg)")
-                DispatchQueue.main.async {
-                    self.statusBar.state = .error(msg)
-                    self.statusBar.buildMenu()
-                }
-                return
-            }
+        print("Loading Parakeet v3...")
+        try transcriber.prepare()
+        DispatchQueue.main.async {
+            self.statusBar.updateDownloadProgress(nil)
         }
-
-        if config.transcriptionBackend == .parakeet {
-            DispatchQueue.main.async {
-                self.statusBar.state = .downloading
-                self.statusBar.updateDownloadProgress("Loading Parakeet v3...")
-            }
-            print("Loading Parakeet v3...")
-            try transcriber.prepare()
-            DispatchQueue.main.async {
-                self.statusBar.updateDownloadProgress(nil)
-            }
-            print("Parakeet v3 ready.")
-        }
-
-        recorder.prewarm()
+        print("Parakeet v3 ready.")
 
         DispatchQueue.main.async { [weak self] in
             self?.startListening()
@@ -168,9 +133,49 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let hotkeyDesc = config.hotkeySummary()
         print("open-wispr v\(OpenWispr.version)")
         print("Hotkey: \(hotkeyDesc)")
-        print("Engine: \(config.transcriptionBackend.displayName)")
-        print("Model: \(config.modelSize)")
+        print("Engine: Parakeet v3")
         print("Ready.")
+
+        promptForLaunchAtLoginIfNeeded()
+    }
+
+    /// Offers to install the login LaunchAgent the first time the daemon reaches
+    /// a working state. Asking earlier would compete with the Accessibility and
+    /// Microphone prompts, and asking after a failed start would be noise.
+    private func promptForLaunchAtLoginIfNeeded() {
+        guard !(config.launchAtLoginPrompted?.value ?? false),
+              !LaunchAtLogin.isEnabled,
+              LaunchAtLogin.defaultExecutablePath() != nil else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Start OpenWispr at login?"
+        alert.informativeText = "OpenWispr can start automatically when you log in, so the "
+            + "dictation hotkey is always ready. You can change this any time from the menu "
+            + "bar icon."
+        alert.addButton(withTitle: "Start at Login")
+        alert.addButton(withTitle: "Not Now")
+
+        NSApp.activate(ignoringOtherApps: true)
+        let wantsLaunchAtLogin = alert.runModal() == .alertFirstButtonReturn
+
+        if wantsLaunchAtLogin {
+            do {
+                try LaunchAtLogin.enable()
+            } catch {
+                print("Could not enable launch at login: \(error.localizedDescription)")
+            }
+        }
+
+        var stored = Config.load()
+        stored.launchAtLoginPrompted = FlexBool(true)
+        do {
+            try stored.save()
+            config = stored
+        } catch {
+            print("Could not record the launch-at-login answer: \(error.localizedDescription)")
+        }
+
+        statusBar.buildMenu()
     }
 
     public func reloadConfig() {
@@ -191,19 +196,25 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applyConfigChange(_ newConfig: Config) {
         guard isReady else { return }
-        let wasDownloading: Bool
-        if case .downloading = statusBar.state { wasDownloading = true } else { wasDownloading = false }
         let newDeviceID = AudioDeviceManager.resolveConfiguredDeviceID(
             uid: newConfig.audioInputDeviceUID,
             legacyID: newConfig.audioInputDeviceID
         )
         let deviceChanged = recorder.preferredDeviceID != newDeviceID
+        let sourceChanged = recorder.captureSource != newConfig.audioCaptureSource
         config = newConfig
         recorder.preferredDeviceID = newDeviceID
-        if deviceChanged {
+        recorder.captureSource = newConfig.audioCaptureSource
+        if sourceChanged && newConfig.audioCaptureSource.includesMicrophone {
+            Permissions.ensureMicrophone()
+        }
+        let screenRecordingMissing = sourceChanged
+            && newConfig.audioCaptureSource.includesSystemAudio
+            && !Permissions.ensureScreenRecording()
+        if deviceChanged || sourceChanged {
             recorder.reload()
         }
-        transcriber = makeTranscriber(for: config)
+        transcriber = makeParakeetTranscriber(for: config)
         inserter = TextInserter()
 
         for m in hotkeyManagers { m.stop() }
@@ -220,67 +231,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeyManagers.append(manager)
         }
 
-        if newConfig.transcriptionBackend == .parakeet {
-            let selectedTranscriber = transcriber!
-            statusBar.state = .downloading
-            statusBar.updateDownloadProgress("Loading Parakeet v3...")
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                do {
-                    try selectedTranscriber.prepare()
-                    DispatchQueue.main.async {
-                        self?.statusBar.state = .idle
-                        self?.statusBar.updateDownloadProgress(nil)
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self?.statusBar.state = .error(error.localizedDescription)
-                        self?.statusBar.updateDownloadProgress(nil)
-                    }
-                }
-            }
-        } else if !wasDownloading && !Transcriber.modelExists(modelSize: config.modelSize) {
-            statusBar.state = .downloading
-            statusBar.updateDownloadProgress("Downloading \(config.modelSize) model...")
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                do {
-                    try ModelDownloader.download(modelSize: newConfig.modelSize) { percent in
-                        DispatchQueue.main.async {
-                            let pct = Int(percent)
-                            self?.statusBar.updateDownloadProgress("Downloading \(newConfig.modelSize) model... \(pct)%", percent: percent)
-                        }
-                    }
-                    DispatchQueue.main.async {
-                        self?.statusBar.state = .idle
-                        self?.statusBar.updateDownloadProgress(nil)
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        print("Error downloading model: \(error.localizedDescription)")
-                        self?.statusBar.state = .idle
-                        self?.statusBar.updateDownloadProgress(nil)
-                    }
-                }
-            }
-        }
-
         statusBar.buildMenu()
 
         let hotkeyDesc = config.hotkeySummary()
-        print("Config updated: engine=\(config.transcriptionBackend.rawValue) lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
+        print("Config updated: engine=parakeet lang=\(config.language) source=\(config.audioCaptureSource.rawValue) hotkey=\(hotkeyDesc)")
+
+        if screenRecordingMissing {
+            presentCaptureFailure(AudioCaptureError.screenRecordingPermissionRequired)
+        }
     }
 
-    private func makeTranscriber(for config: Config) -> any SpeechTranscribing {
-        if config.transcriptionBackend == .parakeet {
-            let transcriber = ParakeetTranscriber(language: config.language)
-            transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
-            return transcriber
-        }
-
-        let transcriber = Transcriber(
-            modelSize: config.modelSize,
-            language: config.language,
-            whisperPrompt: config.whisperPrompt
-        )
+    private func makeParakeetTranscriber(for config: Config) -> ParakeetTranscriber {
+        let transcriber = ParakeetTranscriber(language: config.language)
         transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
         return transcriber
     }
@@ -312,35 +274,83 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleRecordingStart() {
         statusBar.state = .recording
-        do {
-            let outputURL: URL
-            if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
-                outputURL = RecordingStore.tempRecordingURL()
-            } else {
-                outputURL = RecordingStore.newRecordingURL()
+        let outputURL: URL
+        if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
+            outputURL = RecordingStore.tempRecordingURL()
+        } else {
+            outputURL = RecordingStore.newRecordingURL()
+        }
+        currentRecordingURL = outputURL
+
+        recordingStartTask = Task { [weak self] in
+            guard let self else { return false }
+            do {
+                try await self.recorder.startRecording(to: outputURL)
+                return true
+            } catch {
+                DispatchQueue.main.async {
+                    print("Error: \(error.localizedDescription)")
+                    self.recordingLifecycle.recordingStartFailed()
+                    RecordingCancellation.discardTrackedPartialRecording(&self.currentRecordingURL)
+                    self.presentCaptureFailure(error)
+                }
+                return false
             }
-            try recorder.startRecording(to: outputURL)
-            currentRecordingURL = outputURL
-        } catch {
-            print("Error: \(error.localizedDescription)")
-            recordingLifecycle.recordingStartFailed()
-            currentRecordingURL = nil
-            statusBar.state = .idle
+        }
+    }
+
+    /// The status bar renders a single short line, so the full remedy goes into an
+    /// alert. It is shown once per launch because every hotkey press hits the same
+    /// missing grant and would otherwise stack modals.
+    private func presentCaptureFailure(_ error: Error) {
+        let captureError = error as? AudioCaptureError
+        statusBar.state = .error(captureError?.shortDescription ?? error.localizedDescription)
+        statusBar.buildMenu()
+        clearErrorStateAfterDelay()
+
+        guard captureError == .screenRecordingPermissionRequired,
+              !hasShownScreenRecordingAlert else { return }
+        hasShownScreenRecordingAlert = true
+
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording permission required"
+        alert.informativeText = AudioCaptureError.screenRecordingPermissionRequired.localizedDescription
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            Permissions.openScreenRecordingSettings()
+        }
+    }
+
+    private func clearErrorStateAfterDelay() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self, case .error = self.statusBar.state else { return }
+            self.statusBar.state = .idle
+            self.statusBar.buildMenu()
         }
     }
 
     private func handleRecordingStop() {
-        guard let audioURL = recorder.stopRecording() else {
-            RecordingCancellation.discardTrackedPartialRecording(&currentRecordingURL)
-            statusBar.state = .idle
-            return
-        }
-
-        currentRecordingURL = nil
         statusBar.state = .transcribing
+        let startTask = recordingStartTask
+        recordingStartTask = nil
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            guard await startTask?.value ?? true,
+                  let audioURL = await self.recorder.stopRecording() else {
+                DispatchQueue.main.async {
+                    RecordingCancellation.discardTrackedPartialRecording(&self.currentRecordingURL)
+                    if case .error = self.statusBar.state { return }
+                    self.statusBar.state = .idle
+                    self.statusBar.buildMenu()
+                }
+                return
+            }
+
+            self.currentRecordingURL = nil
             let maxRecordings = Config.effectiveMaxRecordings(self.config.maxRecordings)
             defer {
                 if maxRecordings == 0 {
@@ -383,6 +393,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     func handleSystemWillSleep() {
         guard recordingLifecycle.systemWillSleep() == .cancelRecording else { return }
 
+        recordingStartTask?.cancel()
+        recordingStartTask = nil
         recorder.teardown()
         RecordingCancellation.discardTrackedPartialRecording(&currentRecordingURL)
         resetRecordingStatusToIdleIfNeeded()
@@ -395,6 +407,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             uid: config.audioInputDeviceUID,
             legacyID: config.audioInputDeviceID
         )
+        recorder.captureSource = config.audioCaptureSource
         recorder.reload()
     }
 

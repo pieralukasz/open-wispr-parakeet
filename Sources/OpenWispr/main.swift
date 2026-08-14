@@ -9,28 +9,25 @@ let version = OpenWispr.version
 
 func printUsage() {
     print("""
-    open-wispr v\(version) — Push-to-talk voice dictation for macOS
+    open-wispr v\(version) — Local Parakeet v3 voice dictation for macOS
 
     USAGE:
-        open-wispr start              Start the dictation daemon
-        open-wispr set-hotkey <key>   Set the push-to-talk hotkey
-        open-wispr get-hotkey         Show current hotkey
-        open-wispr set-engine <name>  Set engine (parakeet or whisper)
-        open-wispr set-model <size>   Set the Whisper model
-        open-wispr set-language <code>  Set the language (e.g. en, fr, auto)
-        open-wispr download-model [size]  Download a Whisper model
-        open-wispr transcribe-file <path>  Transcribe an audio file with the selected engine
-        open-wispr status             Show configuration and status
-        open-wispr --help             Show this help message
+        open-wispr start                Start the dictation daemon
+        open-wispr set-hotkey <key>     Set the push-to-talk hotkey
+        open-wispr get-hotkey           Show current hotkey
+        open-wispr set-language <code>  Set the language (e.g. pl, en, auto)
+        open-wispr transcribe-file <path>  Transcribe a local audio file with Parakeet v3
+        open-wispr enable-autostart     Start the daemon automatically at login
+        open-wispr disable-autostart    Stop starting the daemon at login
+        open-wispr status               Show configuration and status
+        open-wispr --help               Show this help message
 
     HOTKEY EXAMPLES:
         open-wispr set-hotkey globe             Globe/fn key (default)
         open-wispr set-hotkey rightoption        Right Option key
+        open-wispr set-hotkey rightcmd           Right Command key
         open-wispr set-hotkey f5                 F5 key
         open-wispr set-hotkey ctrl+space         Ctrl + Space
-
-    AVAILABLE MODELS:
-        \(Config.supportedModels.joined(separator: ", "))
     """)
 }
 
@@ -61,114 +58,92 @@ func cmdSetHotkey(_ keyString: String) {
 
     do {
         try config.save()
-        let desc = KeyCodes.describe(keyCode: parsed.keyCode, modifiers: parsed.modifiers)
-        print("Hotkey set to: \(desc)")
+        let description = KeyCodes.describe(
+            keyCode: parsed.keyCode,
+            modifiers: parsed.modifiers
+        )
+        print("Hotkey set to: \(description)")
     } catch {
         print("Error saving config: \(error.localizedDescription)")
         exit(1)
     }
 }
 
-func cmdSetModel(_ size: String) {
-    guard Config.supportedModels.contains(size) else {
-        print("Error: Unknown model '\(size)'")
-        print("Available: \(Config.supportedModels.joined(separator: ", "))")
+func cmdSetLanguage(_ language: String) {
+    let validCodes = Config.supportedLanguages.map(\.code)
+    guard validCodes.contains(language) else {
+        print("Error: Unknown language '\(language)'")
+        print("Available: \(validCodes.joined(separator: ", "))")
         exit(1)
     }
 
     var config = Config.load()
-    config.transcriptionBackend = .whisper
-    config.modelSize = size
+    config.language = language
 
     do {
         try config.save()
-        print("Model set to: \(size)")
-        if !Transcriber.modelExists(modelSize: size) {
-            print("Model will be downloaded on next start.")
-        }
+        let name = Config.supportedLanguages.first(where: { $0.code == language })?.name
+            ?? language
+        print("Language set to: \(name) (\(language))")
     } catch {
         print("Error saving config: \(error.localizedDescription)")
         exit(1)
     }
 }
 
-func cmdSetEngine(_ name: String) {
-    guard let backend = TranscriptionBackend(rawValue: name.lowercased()) else {
-        print("Error: Unknown engine '\(name)'")
-        print("Available: parakeet, whisper")
-        exit(1)
-    }
-
-    var config = Config.load()
-    config.transcriptionBackend = backend
-
-    do {
-        try config.save()
-        print("Engine set to: \(backend.displayName)")
-        if backend == .parakeet {
-            print("Parakeet v3 will be loaded on next start or configuration reload.")
-        }
-    } catch {
-        print("Error saving config: \(error.localizedDescription)")
-        exit(1)
-    }
+/// Resolves the bundled binary the LaunchAgent should run. Falls back to the
+/// installed OpenWispr.app when the CLI was invoked through a symlink on PATH,
+/// since a LaunchAgent pointing outside the bundle loses its TCC grants.
+func autostartExecutablePath() -> String? {
+    if let path = LaunchAtLogin.defaultExecutablePath() { return path }
+    return AppBundleLaunch.findOpenWisprAppBundle()?
+        .appendingPathComponent("Contents/MacOS/open-wispr").path
 }
 
-func cmdSetLanguage(_ lang: String) {
-    let validCodes = Config.supportedLanguages.map { $0.code }
-    guard validCodes.contains(lang) else {
-        print("Error: Unknown language '\(lang)'")
-        print("Available: auto, en, fr, de, es, zh, ja, ko, pt, it, nl, ru, ...")
-        print("See full list: https://github.com/human37/open-wispr")
+func cmdEnableAutostart() {
+    guard let executablePath = autostartExecutablePath() else {
+        print("Error: OpenWispr.app not found — install it before enabling autostart.")
         exit(1)
     }
 
-    var config = Config.load()
-    config.language = lang
-
     do {
-        try config.save()
-        let name = Config.supportedLanguages.first(where: { $0.code == lang })?.name ?? lang
-        print("Language set to: \(name) (\(lang))")
-    } catch {
-        print("Error saving config: \(error.localizedDescription)")
-        exit(1)
-    }
-}
-
-func cmdGetHotkey() {
-    let config = Config.load()
-    let desc = config.hotkeySummary()
-    print("Current hotkey: \(desc)")
-}
-
-func cmdDownloadModel(_ size: String) {
-    do {
-        try ModelDownloader.download(modelSize: size)
+        try LaunchAtLogin.enable(executablePath: executablePath)
+        print("Autostart enabled: \(LaunchAtLogin.plistURL.path)")
+        print("Takes effect at the next login; the running daemon is left alone.")
     } catch {
         print("Error: \(error.localizedDescription)")
         exit(1)
     }
 }
 
+func cmdDisableAutostart() {
+    do {
+        try LaunchAtLogin.disable()
+        print("Autostart disabled")
+    } catch {
+        print("Error: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
+func cmdGetHotkey() {
+    print("Current hotkey: \(Config.load().hotkeySummary())")
+}
+
 func cmdStatus() {
     let config = Config.load()
-    let hotkeyDesc = config.hotkeySummary()
+    let languageName = Config.supportedLanguages
+        .first(where: { $0.code == config.language })?.name ?? config.language
+    let toggleMode = config.toggleMode?.value ?? false
 
     print("open-wispr v\(version)")
     print("Config:      \(Config.configFile.path)")
-    print("Hotkey:      \(hotkeyDesc)")
-    print("Engine:      \(config.transcriptionBackend.displayName)")
-    print("Model:       \(config.modelSize)")
-    let modelReady = config.transcriptionBackend == .parakeet
-        ? "managed by FluidAudio"
-        : (Transcriber.modelExists(modelSize: config.modelSize) ? "yes" : "no")
-    print("Model ready: \(modelReady)")
-    print("whisper-cpp: \(Transcriber.findWhisperBinary() != nil ? "yes" : "no")")
-    let langName = Config.supportedLanguages.first(where: { $0.code == config.language })?.name ?? config.language
-    print("Language:    \(langName) (\(config.language))")
-    let toggleMode = config.toggleMode?.value ?? false
+    print("Hotkey:      \(config.hotkeySummary())")
+    print("Engine:      Parakeet v3")
+    print("Audio input: \(config.audioCaptureSource.displayName)")
+    print("Language:    \(languageName) (\(config.language))")
     print("Toggle:      \(toggleMode ? "on (press to start/stop)" : "off (hold to talk)")")
+    print("Autostart:   \(LaunchAtLogin.isEnabled ? "on (starts at login)" : "off")")
 }
 
 func cmdTranscribeFile(_ path: String) {
@@ -179,16 +154,7 @@ func cmdTranscribeFile(_ path: String) {
     }
 
     let config = Config.load()
-    let transcriber: any SpeechTranscribing
-    if config.transcriptionBackend == .parakeet {
-        transcriber = ParakeetTranscriber(language: config.language)
-    } else {
-        transcriber = Transcriber(
-            modelSize: config.modelSize,
-            language: config.language,
-            whisperPrompt: config.whisperPrompt
-        )
-    }
+    let transcriber = ParakeetTranscriber(language: config.language)
     transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
 
     do {
@@ -203,7 +169,7 @@ func cmdTranscribeFile(_ path: String) {
 let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
 let command: String? = {
-    if let r = rawCommand, r.hasPrefix("-psn_") { return "start" }
+    if let rawCommand, rawCommand.hasPrefix("-psn_") { return "start" }
     return rawCommand
 }()
 
@@ -219,30 +185,19 @@ case "set-hotkey":
         exit(1)
     }
     cmdSetHotkey(args[2])
-case "set-model":
-    guard args.count > 2 else {
-        print("Usage: open-wispr set-model <size>")
-        exit(1)
-    }
-    cmdSetModel(args[2])
-case "set-engine":
-    guard args.count > 2 else {
-        print("Usage: open-wispr set-engine <parakeet|whisper>")
-        exit(1)
-    }
-    cmdSetEngine(args[2])
 case "set-language":
     guard args.count > 2 else {
         print("Usage: open-wispr set-language <code>")
-        print("Examples: en, fr, auto")
+        print("Examples: pl, en, auto")
         exit(1)
     }
     cmdSetLanguage(args[2])
 case "get-hotkey":
     cmdGetHotkey()
-case "download-model":
-    let size = args.count > 2 ? args[2] : "base.en"
-    cmdDownloadModel(size)
+case "enable-autostart":
+    cmdEnableAutostart()
+case "disable-autostart":
+    cmdDisableAutostart()
 case "status":
     cmdStatus()
 case "transcribe-file":
